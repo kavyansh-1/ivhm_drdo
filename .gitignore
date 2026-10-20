@@ -1,0 +1,221 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+
+# Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# =========================
+# Jupyter Notebook
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.local
+.env.*.local
+
+# =========================
+# IDEs / Editors
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+
+# VS Code local settings
+.vscode/settings.json
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+airflow_logs/
+
+# =========================
+# Airflow
+# =========================
+airflow.cfg
+airflow.db
+airflow-webserver.pid
+airflow-scheduler.pid
+
+# Airflow generated folders
+airflow_logs/
+airflow_home/
+
+# =========================
+# Databases
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# PostgreSQL / Docker volumes
+# =========================
+postgres_data/
+pgdata/
+qdrant_data/
+
+# =========================
+# Docker
+# =========================
+.docker/
+docker-data/
+
+# =========================
+# Datasets
+# =========================
+data/
+datasets/
+dataset/
+raw_data/
+processed_data/
+
+# Large dataset formats
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.mat
+*.npy
+*.npz
+
+# =========================
+# Machine Learning Models
+# =========================
+models/
+checkpoints/
+weights/
+artifacts/
+
+# Trained model files
+*.pkl
+*.pickle
+*.joblib
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# TensorFlow
+*.h5
+
+# =========================
+# ML Experiment Outputs
+# =========================
+runs/
+wandb/
+mlruns/
+tensorboard/
+outputs/
+
+# =========================
+# Generated Reports
+# =========================
+reports/
+*.html
+*.json
+
+# If you WANT to keep the main report:
+# !reports/ivhm_report.json
+
+# =========================
+# SHAP / Explainability Outputs
+# =========================
+shap_outputs/
+explainability/
+feature_importance/
+
+# =========================
+# Temporary Files
+# =========================
+tmp/
+temp/
+*.tmp
+*.temp
+
+# =========================
+# Cache
+# =========================
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+# Testing / Coverage
+# =========================
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# =========================
+# Secrets / Credentials
+# =========================
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+service-account*.json
+
+# =========================
+# Local Configuration
+# =========================
+config.local.*
+settings.local.*
+local_config.*
+
+# =========================
+# Frontend / Node (if dashboard uses Node)
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+.next/
+dist/
+build/
+
+# =========================
+# Backup Files
+# =========================
+*.bak
+*.backup
+*.old
