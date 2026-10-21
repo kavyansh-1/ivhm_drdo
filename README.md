@@ -1,322 +1,675 @@
 # DRDO IVHM: Integrated Vehicle Health Management for UAVs
 
-A multi-model machine learning pipeline that monitors 8 UAV subsystems, flags anomalies, classifies health (Healthy / Degraded / Faulty), estimates Remaining Useful Life (RUL), and serves the results on a live web dashboard.
+A multi-model machine learning pipeline that monitors **8 UAV subsystems**, detects anomalies, classifies health states (`Healthy`, `Degraded`, or `Faulty`), estimates Remaining Useful Life (RUL), and presents results through a live web dashboard.
 
-Built as a demo for **DRDO DIA-CoE Research Problem 6: Algorithms for Integrated Vehicle Health Management (IVHM)**, ADE lab, Research Vertical ASDC (Aerospace Systems Design and Characterization). The problem statement's target is a model accuracy above 85%.
+Built as a demonstration for **DRDO DIA-CoE Research Problem 6: Algorithms for Integrated Vehicle Health Management (IVHM)**, ADE Lab, Research Vertical ASDC (Aerospace Systems Design and Characterization). The problem statement targets model accuracy above 85%.
 
----
+## Table of Contents
 
-## Contents
+- [What This Project Does](#what-this-project-does)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Datasets](#datasets)
+- [Setup](#setup)
+- [Running the Pipeline](#running-the-pipeline)
+- [Models and Methodology](#models-and-methodology)
+  - [Feature Engineering](#feature-engineering-day-2)
+  - [Supervised Classification](#supervised-classification-day-3)
+  - [Anomaly Detection](#anomaly-detection-day-4)
+  - [Explainability](#explainability-day-5)
+  - [BiLSTM](#bilstm-day-8-9)
+  - [LSTM Autoencoder](#lstm-autoencoder-day-10-11)
+- [Health Score Calculation](#health-score-calculation)
+- [Dashboard](#dashboard)
+- [Outputs](#outputs)
+- [Known Limitations](#known-limitations)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [References](#references)
 
-1. [What this does](#what-this-does)
-2. [Architecture](#architecture)
-3. [Project structure](#project-structure)
-4. [Datasets](#datasets)
-5. [Setup](#setup)
-6. [Running the pipeline](#running-the-pipeline)
-7. [The models](#the-models)
-8. [How the health score is computed](#how-the-health-score-is-computed)
-9. [Dashboard](#dashboard)
-10. [Outputs](#outputs)
-11. [Known limitations](#known-limitations)
-12. [Troubleshooting](#troubleshooting)
-13. [Roadmap](#roadmap)
+## What This Project Does
 
----
+For each of the eight UAV subsystems, the pipeline:
 
-## What this does
+1. Loads real sensor datasets or generates synthetic time-series data.
+2. Engineers temporal features, including rolling statistics, derivatives, z-scores, and lag values.
+3. Trains supervised machine learning classifiers to predict health states.
+4. Trains unsupervised anomaly detectors using healthy-only data.
+5. Trains deep sequence models (BiLSTM and LSTM Autoencoder).
+6. Combines available model outputs into an ensemble health assessment.
+7. Uses SHAP to explain predictions from tree-based models.
+8. Generates JSON and CSV reports for analysis and dashboard visualization.
 
-For each of 8 UAV subsystems the pipeline:
+### Monitored Subsystems
 
-1. Loads or generates multi-sensor time-series data
-2. Engineers trend features (rolling stats, derivatives, z-scores, lags)
-3. Trains supervised classifiers for health state
-4. Trains unsupervised anomaly detectors on healthy-only data
-5. Trains deep sequence models (BiLSTM and LSTM Autoencoder)
-6. Combines everything in a weighted ensemble into one health score per subsystem
-7. Explains predictions with SHAP
-8. Writes a JSON report that the Flask dashboard displays
+| Subsystem | Example sensor measurements |
+|---|---|
+| Airframe | Structural load, strain, vibration, temperature, stress |
+| Hydraulics | Pressure, flow, temperature, vibration, pump condition |
+| Fuel System | Fuel pressure, flow, temperature, level, pump condition |
+| Li-Ion Battery | Voltage, current, temperature, state of charge, internal resistance |
+| Electronics | Board temperature, voltage, current, signal quality, component condition |
+| Actuators | Position, command error, current, temperature, vibration |
+| ECS (Environmental Control System) | Temperature, pressure, airflow, humidity, cooling performance |
+| Electrical | Voltage, current, frequency, temperature, power condition |
 
-**Subsystems:** Airframe, Hydraulics, Fuel System, Li-Ion Battery, Electronics, Actuators, ECS (Environmental Control System), Electrical.
-
-Each subsystem has 5 sensors (for example the battery has voltage, current, temperature, state of charge, internal resistance).
-
----
+*Note: These are illustrative sensor categories. Actual channels depend on the selected dataset or synthetic data generator.*
 
 ## Architecture
 
+The project follows a staged pipeline, from sensor data ingestion to health assessment and visualization.
+
+```text
+                    RAW SENSOR DATA
+                           |
+                           v
+              +-------------------------+
+              | Day 1: Data Loading      |
+              | and Synthetic Generation|
+              +-------------------------+
+                           |
+                           v
+              +-------------------------+
+              | Day 2: EDA and Feature   |
+              | Engineering              |
+              | 5 sensors -> ~40 features|
+              +-------------------------+
+                           |
+             +-------------+-------------+
+             |             |             |
+             v             v             v
+      +-------------+ +-----------+ +----------------+
+      | Day 3       | | Day 4     | | Day 8-9        |
+      | Classical ML| | Anomaly   | | BiLSTM         |
+      | RF, XGBoost,| | Detection | | Health + RUL   |
+      | Gradient    | | IF + LOF  | |                |
+      | Boosting    | |           | |                |
+      +-------------+ +-----------+ +----------------+
+             |             |             |
+             |             |             |
+             |             |      +----------------+
+             |             |      | Day 10-11      |
+             |             |      | LSTM           |
+             |             |      | Autoencoder    |
+             |             |      +----------------+
+             |             |             |
+             +-------------+-------------+
+                           |
+                           v
+              +-------------------------+
+              | Day 5: SHAP Explainability|
+              | for Tree-Based Models    |
+              +-------------------------+
+                           |
+                           v
+              +-------------------------+
+              | Day 13: Weighted Ensemble|
+              | Health Score, Status, RUL|
+              +-------------------------+
+                           |
+                           v
+              +-------------------------+
+              | JSON and CSV Reports    |
+              +-------------------------+
+                           |
+                           v
+              +-------------------------+
+              | Flask + Chart.js        |
+              | Web Dashboard           |
+              +-------------------------+
+                           |
+                           v
+                 http://localhost:5000
 ```
- Raw sensors (5 per subsystem)
-            |
-            v
- Day 1   Data loading / generation        -> data/raw/*.csv
-            |
-            v
- Day 2   Feature engineering (5 -> ~40)   -> data/processed/*.csv
-            |
-   +--------+-----------------+-------------------+
-   v                          v                   v
- Day 3                      Day 8-9             Day 10-11
- RF / XGBoost / GBM         BiLSTM              LSTM Autoencoder
- (snapshot classifier)      (20-step sequence,  (20-step sequence,
-                            class + RUL)        healthy-only training)
-   |                          |                   |
-   |        Day 4: Isolation Forest + LOF         |
-   |        (healthy-only anomaly scoring)        |
-   +--------------------------+-------------------+
-                              v
- Day 13  Weighted ensemble -> health score, status, RUL
-                              -> reports/ivhm_report.json
-                              v
- Dashboard (Flask + Chart.js) -> http://localhost:5000
 
- Day 5   SHAP explainability (reads Day 3 models)
-```
+**Pipeline stages:**
 
----
+- **Day 1:** Load available datasets or generate synthetic sensor data.
+- **Day 2:** Perform exploratory data analysis (EDA) and feature engineering.
+- **Day 3:** Train and evaluate classical supervised classifiers.
+- **Day 4:** Train anomaly detection models on healthy samples.
+- **Day 5:** Generate SHAP-based explanations for tree models.
+- **Days 8–9:** Train the BiLSTM health classification and RUL model.
+- **Days 10–11:** Train the LSTM Autoencoder for anomaly detection.
+- **Day 13:** Combine available model outputs and generate final reports.
 
-## Project structure
+## Project Structure
 
+The repository is organized into source code, dashboard files, datasets, trained models, and generated reports.
+
+```text
 ivhm_drdo/
 │
 ├── dashboard/
-│   └── app.py                  # Flask backend + API
+│   └── app.py                    # Flask backend and REST API
 │
 ├── public/
-│   └── index.html              # Main dashboard frontend
+│   └── index.html                # Dashboard frontend (Chart.js)
+│
+├── data/
+│   ├── raw/                      # Raw sensor datasets
+│   │   └── *.csv
+│   ├── processed/                # Engineered features and health data
+│   │   └── *.csv
+│   └── real/                     # Downloaded public datasets
+│       ├── CMAPSS/
+│       ├── Battery/
+│       └── FEMTO/
+│
+├── models/
+│   ├── *.pkl                     # Classical models and preprocessing objects
+│   ├── lstm/                     # Trained BiLSTM models
+│   ├── autoencoder/              # Trained LSTM Autoencoders
+│   └── anomaly/                  # Anomaly detection models
 │
 ├── reports/
-│   ├── figures/                # Generated plots and visualizations
-│   ├── ivhm_report.json        # Dashboard/report data
-│   └── ivhm_summary.csv        # Per-subsystem results
+│   ├── figures/                  # Generated plots and visualizations
+│   ├── ivhm_report.json          # Dashboard report data
+│   └── ivhm_summary.csv          # Per-subsystem summary
 │
 ├── src/
-│   ├── day1_data_gen.py        # Dataset loading + synthetic generation
-│   ├── day2_eda.py             # EDA + feature engineering
-│   ├── day3_classical_ml.py    # Random Forest, XGBoost, Gradient Boosting
-│   ├── day4_anomaly.py         # Isolation Forest + LOF
-│   ├── day5_explainability.py  # SHAP explainability
-│   ├── day8_lstm.py            # BiLSTM health + RUL model
-│   ├── day10_autoencoder.py    # LSTM Autoencoder
-│   └── day13_ensemble.py       # Ensemble + final report
+│   ├── day1_data_gen.py           # Dataset loading and synthetic generation
+│   ├── day2_eda.py                # EDA and feature engineering
+│   ├── day3_classical_ml.py       # Random Forest, XGBoost, Gradient Boosting
+│   ├── day4_anomaly.py            # Isolation Forest and LOF
+│   ├── day5_explainability.py     # SHAP explainability
+│   ├── day8_lstm.py               # BiLSTM health classification and RUL
+│   ├── day10_autoencoder.py       # LSTM Autoencoder anomaly detection
+│   └── day13_ensemble.py          # Ensemble and final report generation
 │
 ├── .gitignore
 ├── LICENSE
-├── config.py                   # Project configuration
-├── pyproject.toml              # Python project configuration
-├── requirements-ml.txt         # ML dependencies
-└── run_all.py                  # Master pipeline runner
+├── config.py                      # Shared project configuration
+├── pyproject.toml                 # Python project configuration
+├── requirements-ml.txt            # Machine learning dependencies
+└── run_all.py                     # Master pipeline runner
+```
+
+**Directory overview**
+
+| Directory or file | Purpose |
+|---|---|
+| `data/raw/` | Raw sensor time-series data |
+| `data/processed/` | Feature-engineered data and health-related scores |
+| `data/real/` | Downloaded NASA and FEMTO-ST datasets |
+| `models/` | Saved classifiers, deep learning models, and anomaly detectors |
+| `reports/figures/` | EDA plots, confusion matrices, ROC curves, SHAP charts, and training visualizations |
+| `reports/ivhm_report.json` | Structured results consumed by the dashboard |
+| `reports/ivhm_summary.csv` | Tabular subsystem-level results |
+| `src/` | Individual pipeline stages |
+| `dashboard/` | Flask application and API endpoints |
+| `public/` | Dashboard user interface |
+| `config.py` | Shared paths, parameters, and configuration |
+| `run_all.py` | Runs selected stages or the complete pipeline |
+
+*Note: This tree describes the intended repository layout. Some directories and generated files appear only after the corresponding pipeline stages run. The README refers to `requirements-ml.txt` for ML dependencies; the setup commands below retain `requirements.txt` as originally specified, so ensure that file exists or adjust the command to match your repository.*
 
 ## Datasets
 
-| Subsystem | Intended source | Notes |
+The pipeline uses public prognostics datasets where available and synthetic data for subsystems without suitable public datasets.
+
+| Subsystem | Intended dataset or source | Usage |
 |---|---|---|
-| Airframe | NASA C-MAPSS (FD001) | Turbofan run-to-failure; RUL binned into health classes |
-| Li-Ion Battery | NASA Battery Dataset (B0005, B0006, B0007, B0018) | Health from capacity fade (<70% = Faulty) |
-| Hydraulics | FEMTO-PRONOSTIA bearings | Vibration run-to-failure used as a proxy for pump wear |
-| Fuel System, Electronics, Actuators, ECS, Electrical | Synthetic | No suitable public dataset; physics-inspired sigmoid degradation |
+| Airframe | NASA C-MAPSS FD001 | Turbofan run-to-failure data used as an airframe-health proxy |
+| Li-Ion Battery | NASA Battery Dataset: B0005, B0006, B0007, B0018 | Battery degradation and capacity fade |
+| Hydraulics | FEMTO-ST PRONOSTIA bearing dataset | Bearing degradation used as a hydraulic pump-wear proxy |
+| Fuel System | Synthetic | Physics-inspired degradation simulation |
+| Electronics | Synthetic | Physics-inspired degradation simulation |
+| Actuators | Synthetic | Physics-inspired degradation simulation |
+| ECS | Synthetic | Physics-inspired degradation simulation |
+| Electrical | Synthetic | Physics-inspired degradation simulation |
 
-**Important:** the loaders fall back to synthetic data automatically if a real dataset is not found. The Day 1 log prints a `REAL` / `SYNTH` tag based on the *intended* source, not on what actually loaded. Scroll up in the Day 1 output and look for `not found` warnings to confirm which datasets really loaded. If every subsystem shows exactly 5,000 rows (10 UAVs x 500 steps), the real datasets were not picked up. See [Known limitations](#known-limitations).
+### Important: Verify the Actual Data Source
 
-### Downloading the real datasets (Windows PowerShell)
+The loaders automatically fall back to synthetic data when a real dataset cannot be found.
 
-PowerShell's `wget` needs `-OutFile` and `-UseBasicParsing`, otherwise it only prints the response and saves nothing.
+The Day 1 `REAL` / `SYNTH` log tag reflects the intended source, not necessarily the data that was ultimately loaded. Check the preceding warnings to verify whether the real files were found.
+
+If every subsystem contains exactly 5,000 rows (10 UAVs × 500 timesteps), the pipeline is likely using synthetic fallback data.
+
+### Downloading the Public Datasets (Windows PowerShell)
+
+Run these commands from the project root. Create the destination directories first if they do not already exist.
 
 ```powershell
-wget "https://phm-datasets.s3.amazonaws.com/NASA/6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip" -OutFile "data\real\CMAPSS\cmapss.zip" -UseBasicParsing
-wget "https://phm-datasets.s3.amazonaws.com/NASA/5.+Battery+Data+Set.zip" -OutFile "data\real\Battery\battery.zip" -UseBasicParsing
-wget "https://phm-datasets.s3.amazonaws.com/NASA/10.+FEMTO+Bearing.zip" -OutFile "data\real\FEMTO\femto.zip" -UseBasicParsing
-
-Expand-Archive data\real\CMAPSS\cmapss.zip -DestinationPath data\real\CMAPSS\
-Expand-Archive data\real\Battery\battery.zip -DestinationPath data\real\Battery\
-Expand-Archive data\real\FEMTO\femto.zip -DestinationPath data\real\FEMTO\
+New-Item -ItemType Directory -Force -Path `
+    "data\real\CMAPSS", `
+    "data\real\Battery", `
+    "data\real\FEMTO"
 ```
 
-The extracted folders have long names (for example `6. Turbofan Engine Degradation Simulation Data Set`). The loaders search recursively, so you do not need to move files. Note that the NASA battery archive may contain nested zip files that need a second extraction.
+Download the archives:
 
-Other public UAV datasets worth exploring: RflyMAD, Multi-Fault Multirotor UAV dataset (IEEE DataPort), DronePropA.
+```powershell
+Invoke-WebRequest `
+  -Uri "https://phm-datasets.s3.amazonaws.com/NASA/6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip" `
+  -OutFile "data\real\CMAPSS\cmapss.zip"
 
----
+Invoke-WebRequest `
+  -Uri "https://phm-datasets.s3.amazonaws.com/NASA/5.+Battery+Data+Set.zip" `
+  -OutFile "data\real\Battery\battery.zip"
+
+Invoke-WebRequest `
+  -Uri "https://phm-datasets.s3.amazonaws.com/NASA/10.+FEMTO+Bearing.zip" `
+  -OutFile "data\real\FEMTO\femto.zip"
+```
+
+Extract the archives:
+
+```powershell
+Expand-Archive `
+  -Path "data\real\CMAPSS\cmapss.zip" `
+  -DestinationPath "data\real\CMAPSS" `
+  -Force
+
+Expand-Archive `
+  -Path "data\real\Battery\battery.zip" `
+  -DestinationPath "data\real\Battery" `
+  -Force
+
+Expand-Archive `
+  -Path "data\real\FEMTO\femto.zip" `
+  -DestinationPath "data\real\FEMTO" `
+  -Force
+```
+
+The extracted directories may have long names, such as `6. Turbofan Engine Degradation Simulation Data Set`. The loaders are intended to search recursively, so moving the files should not be necessary. The NASA Battery archive may contain nested ZIP files that require additional extraction.
+
+Other public UAV datasets worth exploring include RflyMAD, the Multi-Fault Multirotor UAV dataset available through IEEE DataPort, and DronePropA.
 
 ## Setup
 
-Python 3.10+ is recommended.
+### Prerequisites
+
+- Python 3.10 or later
+- pip
+- Git (optional, for cloning the repository)
+- PyTorch for deep learning stages
+- An NVIDIA GPU is optional; CPU execution is supported
+
+### 1. Navigate to the Project
 
 ```powershell
-cd C:\Users\Asus\documents\ivhm_drdo
-pip install -r requirements.txt
-
-# PyTorch (choose one)
-pip install torch --index-url https://download.pytorch.org/whl/cpu      # CPU
-pip install torch --index-url https://download.pytorch.org/whl/cu121    # NVIDIA GPU
+cd C:\Users\Asus\Documents\ivhm_drdo
 ```
 
-**Required, to avoid the pipeline hanging on plot windows:** make sure the top of `config.py` contains
+### 2. Install Dependencies
+
+The supplied setup instructions use `requirements.txt`:
+
+```powershell
+pip install -r requirements.txt
+```
+
+If your repository contains only `requirements-ml.txt`, use:
+
+```powershell
+pip install -r requirements-ml.txt
+```
+
+### 3. Install PyTorch
+
+Choose the installation appropriate for your hardware.
+
+**CPU:**
+
+```powershell
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+**NVIDIA GPU with a compatible CUDA 12.1 setup:**
+
+```powershell
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+For other CUDA versions, consult the official [PyTorch installation guide](https://pytorch.org/get-started/locally/).
+
+### 4. Configure Matplotlib
+
+To prevent scripts from blocking while waiting for plot windows to close, ensure that `config.py` selects a non-interactive Matplotlib backend before importing `matplotlib.pyplot`:
 
 ```python
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 ```
 
-and that the scripts do not call `plt.show()` in a way that blocks. Without the `Agg` backend a matplotlib window opens and the script waits until you close it.
+Avoid blocking calls to `plt.show()` in automated pipeline execution.
 
----
+## Running the Pipeline
 
-## Running the pipeline
+Run commands from the project root, in the order shown below.
 
-Run from the project root, one window, in order:
+### Option 1: Run Each Stage Individually
 
 ```powershell
-python day1_data_gen.py
-python day2_eda.py
-python day3_classical_ml.py
-python day4_anomaly.py
-python day5_explainability.py   # needs Day 3 models
-python day8_lstm.py             # needs Day 2 data
-python day10_autoencoder.py     # needs Day 2 data
-python day13_ensemble.py        # uses whatever models exist
-python dashboard/app.py         # then open http://localhost:5000
+python src/day1_data_gen.py
+python src/day2_eda.py
+python src/day3_classical_ml.py
+python src/day4_anomaly.py
+python src/day5_explainability.py
+python src/day8_lstm.py
+python src/day10_autoencoder.py
+python src/day13_ensemble.py
+python dashboard/app.py
 ```
 
-Or use the runner:
+Then open [http://localhost:5000](http://localhost:5000).
+
+*The paths above assume the scripts are located inside `src/`, as shown in the project tree. If your current runner or scripts use root-level paths, adjust the commands accordingly.*
+
+### Option 2: Use the Master Runner
 
 ```powershell
-python run_all.py               # days 1-5, 8, 10, 13
-python run_all.py --day 1 2 3   # selected days
-python run_all.py --dashboard   # launch dashboard only
+# Run all configured pipeline stages
+python run_all.py
+
+# Run selected stages
+python run_all.py --day 1 2 3
+
+# Launch only the dashboard
+python run_all.py --dashboard
 ```
 
-Approximate time on a laptop CPU: 35-45 minutes end to end. Days 8 and 10 are the slowest.
+The master runner is intended to execute Days 1–5, 8, 10, and 13.
 
-Day 13 skips any model that is missing, so you can run it after Day 3 alone. The dashboard shows built-in demo data if `reports/ivhm_report.json` does not exist yet.
+### Expected Runtime
 
----
+The approximate end-to-end runtime on a laptop CPU is **35–45 minutes**, depending on hardware, dataset size, and model parameters. Days 8 and 10 are expected to be the slowest.
 
-## The models
+Day 13 can skip missing models, allowing a partial ensemble to be generated after the classical models have been trained. If `reports/ivhm_report.json` does not exist, the dashboard displays built-in demonstration data.
 
-### Feature engineering (Day 2)
+## Models and Methodology
 
-For every raw sensor `S`, seven features are added: `S_roll_mean`, `S_roll_std`, `S_diff1`, `S_diff2`, `S_zscore`, `S_lag5`, `S_lag10`. Rolling window is 10 steps. Features are computed per UAV so values never leak across aircraft. This takes 5 sensors to roughly 40 features per subsystem.
+### Feature Engineering (Day 2)
 
-### Supervised classifiers (Day 3)
+For each raw sensor \(S\), the pipeline derives seven temporal features:
+
+- `S_roll_mean` — rolling mean
+- `S_roll_std` — rolling standard deviation
+- `S_diff1` — first difference
+- `S_diff2` — second difference
+- `S_zscore` — standardized value
+- `S_lag5` — value from five timesteps earlier
+- `S_lag10` — value from ten timesteps earlier
+
+The rolling window contains 10 timesteps. Features are calculated separately for each UAV to prevent temporal features from crossing aircraft boundaries.
+
+Five raw sensors produce approximately 40 features per subsystem, including the original sensor channels.
+
+### Supervised Classification (Day 3)
+
+The pipeline compares three classical machine learning models.
 
 | Model | Input | Decision basis |
 |---|---|---|
-| Random Forest | One snapshot of ~40 features | 200 trees vote on feature thresholds |
-| XGBoost | Same | 200 sequential trees, each correcting the previous errors |
-| Gradient Boosting | Same | sklearn boosting, 150 trees |
+| Random Forest | One snapshot of approximately 40 features | An ensemble of 200 decision trees |
+| XGBoost | Same feature vector | 200 boosting rounds, with each stage correcting earlier errors |
+| Gradient Boosting | Same feature vector | Scikit-learn boosting with 150 estimators |
 
-The best model per subsystem (by test F1) is saved to `models/<Subsystem>.pkl`. The train/test split is **by UAV**, not by row, so adjacent timesteps from one aircraft never appear on both sides of the split. Cross-validation is 5-fold stratified.
+The best model for each subsystem is selected using test-set F1 score and saved under `models/<Subsystem>.pkl`.
 
-### Unsupervised anomaly detection (Day 4)
+The intended train/test split is by UAV rather than by individual row, preventing adjacent timesteps from the same aircraft from appearing in both sets. Five-fold stratified cross-validation is also used.
 
-Isolation Forest and Local Outlier Factor, both fitted on **healthy samples only**. Scores are normalised to 0-1 and averaged. Isolation Forest catches global outliers; LOF catches locally unusual points.
+### Anomaly Detection (Day 4)
 
-### BiLSTM (Day 8-9)
+Two unsupervised methods are trained using healthy samples only:
 
-- Input: 20 consecutive timesteps x ~40 features
-- Two stacked bidirectional LSTM layers (128 then 64 units), dropout 0.3, batch norm
-- Two heads: health class (3 logits) and normalised RUL (sigmoid)
-- Loss: cross-entropy + 0.3 x MSE on RUL; Adam, cosine schedule, early stopping (patience 8)
+- **Isolation Forest:** Detects observations that are unusually easy to isolate from the rest of the data.
+- **Local Outlier Factor (LOF):** Identifies observations that have unusually low local density compared with their neighbors.
 
-### LSTM Autoencoder (Day 10-11)
-
-- Trained only on healthy 20-step windows
-- Encoder (BiLSTM) to a 32-dim latent vector, decoder (LSTM) reconstructs the window
-- Anomaly = high reconstruction error; threshold = mean + 2 x std on a healthy validation set
+Their normalized anomaly scores are averaged to obtain a combined anomaly score.
 
 ### Explainability (Day 5)
 
-SHAP `TreeExplainer` on the saved tree models: beeswarm plots (Faulty class) and mean |SHAP| bar charts per subsystem.
+SHAP (SHapley Additive exPlanations) is applied to saved tree-based models using `TreeExplainer`.
 
----
+Generated visualizations include:
 
-## How the health score is computed
+- Beeswarm plots for the `Faulty` class
+- Mean absolute SHAP feature-importance charts for each subsystem
 
-Day 13 combines the available models:
+These plots help identify which features contributed most to the model's predictions.
 
-```
-ensemble_probs = 0.5 x classical + 0.3 x BiLSTM + 0.2 x Autoencoder
-                 (weights are renormalised if a model is missing)
+### BiLSTM (Days 8–9)
 
-health_score   = (1 - P(Faulty)) x max_class_probability x 100
-status         = most frequent predicted class across the subsystem's timesteps
-RUL (hours)    = max(0, 5.5 x avg_health - 50)      # heuristic, see limitations
-```
+The Bidirectional Long Short-Term Memory (BiLSTM) network analyzes sequences rather than isolated snapshots.
 
-The Autoencoder's reconstruction error is converted to pseudo-probabilities with a fixed mapping, so its contribution is an approximation rather than a calibrated probability.
+**Architecture and training:**
 
----
+- Input: 20 consecutive timesteps × approximately 40 features
+- Two stacked bidirectional LSTM layers with 128 and 64 units
+- Dropout: 0.3
+- Batch normalization
+- Two output heads:
+  - Health classification: three logits
+  - Normalized RUL: sigmoid output
+- Loss: cross-entropy + 0.3 × mean squared error for RUL
+- Optimizer: Adam
+- Learning-rate schedule: cosine schedule
+- Early stopping: patience of 8 epochs
+
+The model jointly learns health-state classification and a remaining-life target. Where explicit RUL labels are unavailable, the target is a proxy and must not be treated as validated remaining-life estimation.
+
+### LSTM Autoencoder (Days 10–11)
+
+The LSTM Autoencoder learns the patterns found in healthy operating sequences.
+
+**Architecture and training:**
+
+1. Train using healthy 20-timestep windows.
+2. Encode each window into a 32-dimensional latent representation using a bidirectional LSTM encoder.
+3. Reconstruct the input sequence using an LSTM decoder.
+4. Calculate reconstruction error between the input and reconstructed sequence.
+5. Flag sequences with unusually high reconstruction error as potential anomalies.
+
+The anomaly threshold is calculated as:
+
+\[
+\text{Threshold} = \mu_{\text{healthy}} + 2\sigma_{\text{healthy}}
+\]
+
+Here, \(\mu_{\text{healthy}}\) and \(\sigma_{\text{healthy}}\) are the mean and standard deviation of reconstruction error on a healthy validation set.
+
+## Health Score Calculation
+
+Day 13 combines predictions from the available models into a final health assessment.
+
+### 1. Ensemble Probabilities
+
+The initial weights are:
+
+\[
+P_{\text{ensemble}} =
+0.5P_{\text{classical}} +
+0.3P_{\text{BiLSTM}} +
+0.2P_{\text{autoencoder}}
+\]
+
+Weights are renormalized when one or more models are unavailable.
+
+The Autoencoder's reconstruction error is converted into pseudo-probabilities using a fixed mapping. Consequently, its contribution is approximate rather than a calibrated probability estimate.
+
+### 2. Health Score
+
+The reported score is:
+
+\[
+\text{Health Score} =
+(1-P(\text{Faulty}))\times
+P(\text{predicted class})_{\max}\times 100
+\]
+
+The score combines the probability of not being faulty with the maximum predicted class probability.
+
+### 3. Health Status
+
+The subsystem status is assigned using the most frequently predicted class across its timesteps:
+
+- `Healthy`
+- `Degraded`
+- `Faulty`
+
+### 4. Remaining Useful Life (RUL)
+
+The current ensemble uses the following heuristic:
+
+\[
+\text{RUL (hours)} = \max(0,\;5.5\times \text{avg\_health}-50)
+\]
+
+This is a rough mapping rather than a trained and validated RUL estimator. The reported value should be treated as a demonstration output, not a reliable operational prediction.
 
 ## Dashboard
 
-Flask backend + Chart.js frontend.
+The project includes a Flask backend and a Chart.js frontend.
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /` | Dashboard page |
-| `GET /api/report` | Full report JSON from Day 13 |
-| `GET /api/live` | Report with +/-2% random jitter, simulating telemetry updates |
-| `POST /api/predict` | Single-sample inference: `{"subsystem": "ECS", "sensors": {...}}` |
+### Dashboard Features
 
-The page shows overall system health, anomaly count, critical systems, one card per subsystem (health, status, RUL, anomaly count), an alert log, and per-subsystem detail tabs.
+- Overall system health
+- Anomaly count
+- Critical subsystem overview
+- Individual cards for all eight subsystems
+- Health score, status, RUL, and anomaly count per subsystem
+- Alert log
+- Per-subsystem detail tabs
+- A demonstration trend chart
 
----
+### API Endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/` | Serves the dashboard page |
+| `GET` | `/api/report` | Returns the complete report generated by Day 13 |
+| `GET` | `/api/live` | Returns the report with ±2% random jitter to simulate telemetry updates |
+| `POST` | `/api/predict` | Performs single-sample inference |
+
+Example request for `/api/predict`:
+
+```json
+{
+  "subsystem": "ECS",
+  "sensors": {
+    "temperature": 35.0,
+    "pressure": 101.0
+  }
+}
+```
+
+*The sensor names and values are illustrative. Use the exact sensor keys expected by the selected subsystem's model.*
+
+Start the dashboard:
+
+```powershell
+python dashboard/app.py
+```
+
+Open [http://localhost:5000](http://localhost:5000) in your browser.
+
+**Important:** The current dashboard does not receive live aircraft telemetry. The `/api/live` endpoint and 24-hour trend chart use simulated updates for demonstration.
 
 ## Outputs
 
-| Path | Content |
+The pipeline generates the following artifacts.
+
+| Path | Contents |
 |---|---|
-| `data/raw/*.csv` | Raw sensor data per subsystem |
-| `data/processed/*.csv` | Feature-engineered data; `*_health.csv` has anomaly and health scores |
-| `models/*.pkl` | Best classical model + scaler + feature list per subsystem |
-| `models/lstm/`, `models/autoencoder/`, `models/anomaly/` | Deep and anomaly models |
-| `reports/ivhm_report.json` | Dashboard feed |
-| `reports/ivhm_summary.csv` | Per-subsystem results table |
-| `reports/figures/` | Distributions, PCA, confusion matrices, ROC curves, SHAP, fleet heatmap, training curves |
+| `data/raw/*.csv` | Raw sensor time-series data |
+| `data/processed/*.csv` | Feature-engineered datasets |
+| `data/processed/*_health.csv` | Health and anomaly-related scores, where generated |
+| `models/*.pkl` | Classical models, scalers, and feature metadata |
+| `models/lstm/` | Trained BiLSTM artifacts |
+| `models/autoencoder/` | Trained Autoencoder artifacts |
+| `models/anomaly/` | Saved anomaly detection models |
+| `reports/ivhm_report.json` | Dashboard and report data |
+| `reports/ivhm_summary.csv` | Per-subsystem summary |
+| `reports/figures/` | Distributions, PCA, confusion matrices, ROC curves, SHAP plots, fleet heatmaps, and training curves |
 
----
+## Known Limitations
 
-## Known limitations
+Read these limitations before interpreting or presenting the results.
 
-Read these before presenting the results.
+### 1. Real vs. Synthetic Data
 
-1. **Real vs synthetic data.** Check that the real datasets actually loaded (see [Datasets](#datasets)). If they fell back to synthetic, results describe the synthetic generator, not NASA data. Synthetic data is built with well-separated normal / degraded / faulty ranges, so classifiers can score near-perfect accuracy on it. That reflects the simulator's design and is not evidence of real-world performance.
-2. **Health labels are derived, not measured.** Labels come from RUL bins, capacity fade, life fraction, or the degradation curve. A model that reproduces them is reproducing our labelling rule.
-3. **RUL is a heuristic.** The `5.5 x health - 50` formula in Day 13 is a rough mapping, not a trained regressor. The BiLSTM RUL head uses a proxy target when no explicit RUL column exists (only C-MAPSS has one). Do not quote RUL values as validated predictions.
-4. **Hydraulics and Airframe are proxies.** Bearing vibration stands in for hydraulic pump wear, and turbofan engine sensors stand in for airframe health. Several hydraulic channels (pressure, flow, temperature) are synthesised from bearing life fraction rather than measured.
-5. **Dashboard motion is simulated.** The 24-hour trend chart and the `/api/live` jitter are generated for demonstration; there is no live telemetry source yet.
-6. **The ~70% health everywhere reflects class mix.** Each subsystem score averages over all UAVs and timesteps, including the degraded and faulty portions, so scores cluster near the healthy fraction of the data. Per-UAV scores in the JSON are more informative.
-7. **The ensemble weights (0.5 / 0.3 / 0.2) are hand-chosen**, not tuned on a validation set.
-8. **No held-out evaluation of the full ensemble.** Day 13 scores the same processed data the models were trained on, so the ensemble numbers are not a clean test-set measurement. Per-model test metrics from Day 3 and Day 8 are the honest ones.
+The loaders can silently fall back to synthetic data when real datasets are missing. Synthetic data uses deliberately separated healthy, degraded, and faulty ranges, which can produce near-perfect classification results.
 
----
+High accuracy on synthetic data is not evidence of real-world UAV performance.
+
+### 2. Derived Health Labels
+
+Health labels are derived from rules such as RUL bins, battery capacity fade, life fraction, or a synthetic degradation curve. A model may simply learn to reproduce these labeling rules rather than discover independently verified faults.
+
+### 3. RUL Is Not Yet Validated
+
+The ensemble RUL formula is heuristic. The BiLSTM also uses a proxy target when explicit RUL data is unavailable. RUL values should not be quoted as validated predictions of actual component lifetime.
+
+### 4. Airframe and Hydraulics Are Proxies
+
+NASA C-MAPSS turbofan data is used as a proxy for airframe health. FEMTO-ST bearing data is used as a proxy for hydraulic pump wear. Several hydraulic channels, including pressure, flow, and temperature, are synthesized from bearing life fraction rather than directly measured.
+
+These proxies do not fully represent real UAV subsystem behavior.
+
+### 5. Dashboard Telemetry Is Simulated
+
+The `/api/live` endpoint adds random jitter to report values, and the 24-hour trend chart is generated for demonstration. No real telemetry source is connected yet.
+
+### 6. Aggregate Health Scores Reflect Dataset Composition
+
+Subsystem scores near 70% can result from averaging across all UAVs and timesteps, including degraded and faulty periods. These aggregate scores do not necessarily represent the condition of a particular aircraft. Per-UAV results in the JSON report may provide more useful detail.
+
+### 7. Ensemble Weights Are Hand-Chosen
+
+The 0.5 / 0.3 / 0.2 ensemble weights have not been optimized on an independent validation set.
+
+### 8. Full-Ensemble Evaluation Is Not Held Out
+
+Day 13 scores the processed data available to the ensemble rather than performing a strict held-out evaluation of the complete pipeline. As a result, its aggregate scores are not an unbiased test-set measurement.
+
+Per-model test metrics from Day 3 and Day 8 are more informative, provided the split is genuinely independent and preprocessing avoids data leakage.
+
+### 9. The 85% Target Requires Independent Validation
+
+The DRDO problem statement targets accuracy above 85%. This project should not claim to have met that target based solely on synthetic-data accuracy or in-sample ensemble results.
+
+A credible performance claim requires clearly documented data sources, held-out evaluation, suitable metrics, and preferably validation on real UAV sensor data.
 
 ## Troubleshooting
 
-| Symptom | Fix |
+| Problem | Possible solution |
 |---|---|
-| Script hangs at "Generating plots" | Add `matplotlib.use('Agg')` at the top of `config.py`, or close the hidden plot window |
-| `wget` finishes but no file appears | Use `-OutFile <path> -UseBasicParsing` |
-| `C-MAPSS train_FD001.txt not found` | Check extraction; files must exist somewhere under `data/real/CMAPSS/` |
-| All subsystems have exactly 5,000 rows | Real datasets were not found; synthetic fallback is in use |
-| `ModuleNotFoundError: torch` | Install PyTorch (see Setup) |
-| Day 13 says "No results" | Run Days 1-3 first |
-| `lof.score_samples` error on older scikit-learn | Upgrade to scikit-learn >= 1.3 (LOF is created with `novelty=True`) |
-| SHAP fails for a subsystem | Make sure the Day 3 `.pkl` exists; SHAP needs a tree model |
-
----
+| Script hangs while generating plots | Set `matplotlib.use("Agg")` before importing `pyplot` and avoid blocking `plt.show()` calls. |
+| `wget` or download command finishes without creating a file | Use `Invoke-WebRequest -OutFile` and verify the destination directory exists. |
+| `train_FD001.txt` is not found | Check extraction and confirm the file exists somewhere under `data/real/CMAPSS/`. |
+| Every subsystem has exactly 5,000 rows | Check whether the loaders fell back to synthetic data. |
+| `ModuleNotFoundError: No module named 'torch'` | Install PyTorch using the appropriate CPU or CUDA command. |
+| Day 13 reports no results | Run Days 1–3 first and confirm their expected output files exist. |
+| `lof.score_samples` fails on an older scikit-learn version | Upgrade to scikit-learn 1.3 or later and verify LOF is configured with `novelty=True`. |
+| SHAP fails for a subsystem | Confirm the corresponding Day 3 tree model exists and is compatible with SHAP. |
+| Dashboard displays demo data instead of pipeline results | Run Day 13 and verify `reports/ivhm_report.json` exists at the expected path. |
+| Pipeline cannot locate modules or files | Confirm that commands are run from the repository root and that script paths match the actual directory structure. |
 
 ## Roadmap
 
-- Verify and document exactly which datasets loaded; add a run summary file that records the data source per subsystem
-- Replace the RUL heuristic with a trained RUL regressor evaluated on held-out C-MAPSS engines
-- Evaluate the ensemble on a strict held-out UAV split and tune the weights
-- Add the Multi-Fault UAV / RflyMAD datasets for real flight-controller and motor signals
-- Stream real or replayed telemetry into the dashboard instead of simulated jitter
-- Write the technical report and slide deck
+- [ ] Verify and document the actual dataset loaded for each subsystem.
+- [ ] Generate a run summary recording data source, row count, and preprocessing details.
+- [ ] Replace the RUL heuristic with a trained regressor evaluated on held-out C-MAPSS engines.
+- [ ] Evaluate the complete ensemble on a strict held-out UAV split.
+- [ ] Tune ensemble weights using validation data.
+- [ ] Integrate the Multi-Fault UAV and RflyMAD datasets for real flight-controller and motor signals.
+- [ ] Replace simulated dashboard updates with real or replayed telemetry.
+- [ ] Validate the complete pipeline against the DRDO accuracy target using appropriate independent evaluation.
+- [ ] Prepare the technical report and presentation deck.
+
+## References
+
+1. **DRDO:** *Research Problems for DIA-CoEs*, September 2026. Directorate of Futuristic Technology Management. Problem 6: Algorithms for Integrated Vehicle Health Management (IVHM), ADE.
+2. **NASA Prognostics Center of Excellence:** C-MAPSS Turbofan Engine Degradation Simulation and Battery datasets.
+3. **FEMTO-ST Institute:** PRONOSTIA bearing degradation dataset, IEEE PHM 2012 Data Challenge.
+4. **Lundberg, S. M., and Lee, S.-I.** “A Unified Approach to Interpreting Model Predictions.” NeurIPS, 2017. SHAP.
 
 ---
+
+**Project status:** Research demonstration and prototype. Results depend on the dataset actually loaded, the evaluation procedure, and the availability of trained models. Real-world UAV validation remains future work.
 
 ## References
 
