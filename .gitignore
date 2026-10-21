@@ -144,12 +144,14 @@ outputs/
 # =========================
 # Generated Reports
 # =========================
-reports/
+reports/*
+!reports/ivhm_report.json
+!reports/ivhm_summary.csv
+
 *.html
 *.json
 
-# If you WANT to keep the main report:
-# !reports/ivhm_report.json
+
 
 # =========================
 # SHAP / Explainability Outputs

@@ -1,0 +1,9 @@
+subsystem,avg_health,min_health,rul_hours,status,n_anomalies,models_used
+Airframe,68.5,5.7,326,Healthy,1017,classical|lstm|autoencoder
+Hydraulics,71.2,5.6,341,Healthy,809,classical|lstm|autoencoder
+Fuel System,69.8,5.6,334,Healthy,979,classical|lstm|autoencoder
+Li-Ion Battery,69.4,5.6,331,Healthy,1033,classical|lstm|autoencoder
+Electronics,68.6,5.6,327,Healthy,1076,classical|lstm|autoencoder
+Actuators,70.5,5.6,337,Healthy,916,classical|lstm|autoencoder
+ECS,68.5,5.6,326,Healthy,1058,classical|lstm|autoencoder
+Electrical,69.2,5.6,330,Healthy,1081,classical|lstm|autoencoder
