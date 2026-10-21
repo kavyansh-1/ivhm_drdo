@@ -1,6 +1,6 @@
 # DRDO IVHM: Integrated Vehicle Health Management for UAVs
 
-A multi-model machine learning pipeline that monitors **8 UAV subsystems**, detects anomalies, classifies health states (`Healthy`, `Degraded`, or `Faulty`), estimates Remaining Useful Life (RUL), and presents results through a live web dashboard.
+A multi-model machine learning pipeline that monitors **8 UAV subsystems**, detects anomalies, classifies health states (`Healthy`, `Degraded`, or `Faulty`), estimates Remaining Useful Life (RUL), and presents the results through a web dashboard.
 
 Built as a demonstration for **DRDO DIA-CoE Research Problem 6: Algorithms for Integrated Vehicle Health Management (IVHM)**, ADE Lab, Research Vertical ASDC (Aerospace Systems Design and Characterization). The problem statement targets model accuracy above 85%.
 
@@ -13,12 +13,6 @@ Built as a demonstration for **DRDO DIA-CoE Research Problem 6: Algorithms for I
 - [Setup](#setup)
 - [Running the Pipeline](#running-the-pipeline)
 - [Models and Methodology](#models-and-methodology)
-  - [Feature Engineering](#feature-engineering-day-2)
-  - [Supervised Classification](#supervised-classification-day-3)
-  - [Anomaly Detection](#anomaly-detection-day-4)
-  - [Explainability](#explainability-day-5)
-  - [BiLSTM](#bilstm-day-8-9)
-  - [LSTM Autoencoder](#lstm-autoencoder-day-10-11)
 - [Health Score Calculation](#health-score-calculation)
 - [Dashboard](#dashboard)
 - [Outputs](#outputs)
@@ -31,7 +25,7 @@ Built as a demonstration for **DRDO DIA-CoE Research Problem 6: Algorithms for I
 
 For each of the eight UAV subsystems, the pipeline:
 
-1. Loads real sensor datasets or generates synthetic time-series data.
+1. Loads public datasets or generates synthetic sensor time-series data.
 2. Engineers temporal features, including rolling statistics, derivatives, z-scores, and lag values.
 3. Trains supervised machine learning classifiers to predict health states.
 4. Trains unsupervised anomaly detectors using healthy-only data.
@@ -86,7 +80,6 @@ The project follows a staged pipeline, from sensor data ingestion to health asse
       | Boosting    | |           | |                |
       +-------------+ +-----------+ +----------------+
              |             |             |
-             |             |             |
              |             |      +----------------+
              |             |      | Day 10-11      |
              |             |      | LSTM           |
@@ -94,12 +87,6 @@ The project follows a staged pipeline, from sensor data ingestion to health asse
              |             |      +----------------+
              |             |             |
              +-------------+-------------+
-                           |
-                           v
-              +-------------------------+
-              | Day 5: SHAP Explainability|
-              | for Tree-Based Models    |
-              +-------------------------+
                            |
                            v
               +-------------------------+
@@ -135,7 +122,7 @@ The project follows a staged pipeline, from sensor data ingestion to health asse
 
 ## Project Structure
 
-The repository is organized into source code, dashboard files, datasets, trained models, and generated reports.
+The repository contains the source code, configuration, and dashboard implementation. **Large datasets, trained model artifacts, and generated outputs are maintained locally and excluded from Git version control because of their size.**
 
 ```text
 ivhm_drdo/
@@ -146,24 +133,22 @@ ivhm_drdo/
 ├── public/
 │   └── index.html                # Dashboard frontend (Chart.js)
 │
-├── data/
-│   ├── raw/                      # Raw sensor datasets
-│   │   └── *.csv
+├── data/                         # Local datasets (excluded from Git)
+│   ├── raw/                      # Raw sensor time-series data
 │   ├── processed/                # Engineered features and health data
-│   │   └── *.csv
 │   └── real/                     # Downloaded public datasets
 │       ├── CMAPSS/
 │       ├── Battery/
 │       └── FEMTO/
 │
-├── models/
-│   ├── *.pkl                     # Classical models and preprocessing objects
+├── models/                       # Locally trained models (excluded from Git)
+│   ├── *.pkl                     # Classical ML models and preprocessing objects
 │   ├── lstm/                     # Trained BiLSTM models
 │   ├── autoencoder/              # Trained LSTM Autoencoders
-│   └── anomaly/                  # Anomaly detection models
+│   └── anomaly/                  # Trained anomaly detection models
 │
-├── reports/
-│   ├── figures/                  # Generated plots and visualizations
+├── reports/                      # Generated outputs (excluded from Git)
+│   ├── figures/                  # Plots and visualizations
 │   ├── ivhm_report.json          # Dashboard report data
 │   └── ivhm_summary.csv          # Per-subsystem summary
 │
@@ -175,34 +160,27 @@ ivhm_drdo/
 │   ├── day5_explainability.py     # SHAP explainability
 │   ├── day8_lstm.py               # BiLSTM health classification and RUL
 │   ├── day10_autoencoder.py       # LSTM Autoencoder anomaly detection
-│   └── day13_ensemble.py          # Ensemble and final report generation
+│   └── day13_ensemble.py          # Ensemble and report generation
 │
-├── .gitignore
+├── .gitignore                    # Excludes large and generated artifacts
 ├── LICENSE
-├── config.py                      # Shared project configuration
-├── pyproject.toml                 # Python project configuration
-├── requirements-ml.txt            # Machine learning dependencies
-└── run_all.py                     # Master pipeline runner
+├── config.py                     # Shared project configuration
+├── pyproject.toml                # Python project configuration
+├── requirements-ml.txt           # Machine learning dependencies
+└── run_all.py                    # Master pipeline runner
 ```
 
-**Directory overview**
+### Dataset and Model Availability
 
-| Directory or file | Purpose |
-|---|---|
-| `data/raw/` | Raw sensor time-series data |
-| `data/processed/` | Feature-engineered data and health-related scores |
-| `data/real/` | Downloaded NASA and FEMTO-ST datasets |
-| `models/` | Saved classifiers, deep learning models, and anomaly detectors |
-| `reports/figures/` | EDA plots, confusion matrices, ROC curves, SHAP charts, and training visualizations |
-| `reports/ivhm_report.json` | Structured results consumed by the dashboard |
-| `reports/ivhm_summary.csv` | Tabular subsystem-level results |
-| `src/` | Individual pipeline stages |
-| `dashboard/` | Flask application and API endpoints |
-| `public/` | Dashboard user interface |
-| `config.py` | Shared paths, parameters, and configuration |
-| `run_all.py` | Runs selected stages or the complete pipeline |
+The `data/`, `models/`, and generated `reports/` directories are maintained locally and are not committed to the repository.
 
-*Note: This tree describes the intended repository layout. Some directories and generated files appear only after the corresponding pipeline stages run. The README refers to `requirements-ml.txt` for ML dependencies; the setup commands below retain `requirements.txt` as originally specified, so ensure that file exists or adjust the command to match your repository.*
+- **Datasets:** Public datasets are downloaded separately and loaded by the pipeline. Synthetic data can be generated automatically when the required real data is unavailable.
+- **Trained models:** Classical ML models, BiLSTM weights, Autoencoder weights, and anomaly detection models are generated and stored locally.
+- **Generated outputs:** Reports, CSV summaries, and visualizations are produced during pipeline execution.
+
+The repository therefore documents the complete project structure without requiring large datasets or model files to be uploaded to GitHub. These files must be downloaded, generated, or otherwise obtained separately when setting up the project on another machine.
+
+*The directory tree represents the intended local project layout. Some files and directories are created only after running the corresponding pipeline stages.*
 
 ## Datasets
 
@@ -257,20 +235,9 @@ Invoke-WebRequest `
 Extract the archives:
 
 ```powershell
-Expand-Archive `
-  -Path "data\real\CMAPSS\cmapss.zip" `
-  -DestinationPath "data\real\CMAPSS" `
-  -Force
-
-Expand-Archive `
-  -Path "data\real\Battery\battery.zip" `
-  -DestinationPath "data\real\Battery" `
-  -Force
-
-Expand-Archive `
-  -Path "data\real\FEMTO\femto.zip" `
-  -DestinationPath "data\real\FEMTO" `
-  -Force
+Expand-Archive -Path "data\real\CMAPSS\cmapss.zip" -DestinationPath "data\real\CMAPSS" -Force
+Expand-Archive -Path "data\real\Battery\battery.zip" -DestinationPath "data\real\Battery" -Force
+Expand-Archive -Path "data\real\FEMTO\femto.zip" -DestinationPath "data\real\FEMTO" -Force
 ```
 
 The extracted directories may have long names, such as `6. Turbofan Engine Degradation Simulation Data Set`. The loaders are intended to search recursively, so moving the files should not be necessary. The NASA Battery archive may contain nested ZIP files that require additional extraction.
@@ -295,13 +262,13 @@ cd C:\Users\Asus\Documents\ivhm_drdo
 
 ### 2. Install Dependencies
 
-The supplied setup instructions use `requirements.txt`:
+If your repository contains `requirements.txt`:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-If your repository contains only `requirements-ml.txt`, use:
+If your repository contains only `requirements-ml.txt`:
 
 ```powershell
 pip install -r requirements-ml.txt
@@ -334,7 +301,7 @@ import matplotlib
 matplotlib.use("Agg")
 ```
 
-Avoid blocking calls to `plt.show()` in automated pipeline execution.
+Avoid blocking calls to `plt.show()` during automated pipeline execution.
 
 ## Running the Pipeline
 
@@ -356,7 +323,7 @@ python dashboard/app.py
 
 Then open [http://localhost:5000](http://localhost:5000).
 
-*The paths above assume the scripts are located inside `src/`, as shown in the project tree. If your current runner or scripts use root-level paths, adjust the commands accordingly.*
+*These commands assume the scripts are inside `src/`, as shown in the project tree. Adjust the paths if your actual repository layout differs.*
 
 ### Option 2: Use the Master Runner
 
@@ -416,7 +383,7 @@ The intended train/test split is by UAV rather than by individual row, preventin
 Two unsupervised methods are trained using healthy samples only:
 
 - **Isolation Forest:** Detects observations that are unusually easy to isolate from the rest of the data.
-- **Local Outlier Factor (LOF):** Identifies observations that have unusually low local density compared with their neighbors.
+- **Local Outlier Factor (LOF):** Identifies observations with unusually low local density compared with their neighbors.
 
 Their normalized anomaly scores are averaged to obtain a combined anomaly score.
 
@@ -453,7 +420,7 @@ The model jointly learns health-state classification and a remaining-life target
 
 ### LSTM Autoencoder (Days 10–11)
 
-The LSTM Autoencoder learns the patterns found in healthy operating sequences.
+The LSTM Autoencoder learns patterns found in healthy operating sequences.
 
 **Architecture and training:**
 
@@ -488,7 +455,7 @@ P_{\text{ensemble}} =
 
 Weights are renormalized when one or more models are unavailable.
 
-The Autoencoder's reconstruction error is converted into pseudo-probabilities using a fixed mapping. Consequently, its contribution is approximate rather than a calibrated probability estimate.
+The Autoencoder's reconstruction error is converted to pseudo-probabilities using a fixed mapping. Its contribution is therefore approximate rather than a calibrated probability estimate.
 
 ### 2. Health Score
 
@@ -570,7 +537,7 @@ Open [http://localhost:5000](http://localhost:5000) in your browser.
 
 ## Outputs
 
-The pipeline generates the following artifacts.
+The pipeline generates the following artifacts locally.
 
 | Path | Contents |
 |---|---|
@@ -585,13 +552,15 @@ The pipeline generates the following artifacts.
 | `reports/ivhm_summary.csv` | Per-subsystem summary |
 | `reports/figures/` | Distributions, PCA, confusion matrices, ROC curves, SHAP plots, fleet heatmaps, and training curves |
 
+These artifacts are not committed to Git. They must be generated locally or obtained separately before running the full pipeline with trained models.
+
 ## Known Limitations
 
 Read these limitations before interpreting or presenting the results.
 
 ### 1. Real vs. Synthetic Data
 
-The loaders can silently fall back to synthetic data when real datasets are missing. Synthetic data uses deliberately separated healthy, degraded, and faulty ranges, which can produce near-perfect classification results.
+The loaders can fall back to synthetic data when real datasets are missing. Synthetic data uses deliberately separated healthy, degraded, and faulty ranges, which can produce near-perfect classification results.
 
 High accuracy on synthetic data is not evidence of real-world UAV performance.
 
@@ -638,7 +607,7 @@ A credible performance claim requires clearly documented data sources, held-out 
 | Problem | Possible solution |
 |---|---|
 | Script hangs while generating plots | Set `matplotlib.use("Agg")` before importing `pyplot` and avoid blocking `plt.show()` calls. |
-| `wget` or download command finishes without creating a file | Use `Invoke-WebRequest -OutFile` and verify the destination directory exists. |
+| Download command finishes without creating a file | Use `Invoke-WebRequest -OutFile` and verify that the destination directory exists. |
 | `train_FD001.txt` is not found | Check extraction and confirm the file exists somewhere under `data/real/CMAPSS/`. |
 | Every subsystem has exactly 5,000 rows | Check whether the loaders fell back to synthetic data. |
 | `ModuleNotFoundError: No module named 'torch'` | Install PyTorch using the appropriate CPU or CUDA command. |
@@ -646,7 +615,7 @@ A credible performance claim requires clearly documented data sources, held-out 
 | `lof.score_samples` fails on an older scikit-learn version | Upgrade to scikit-learn 1.3 or later and verify LOF is configured with `novelty=True`. |
 | SHAP fails for a subsystem | Confirm the corresponding Day 3 tree model exists and is compatible with SHAP. |
 | Dashboard displays demo data instead of pipeline results | Run Day 13 and verify `reports/ivhm_report.json` exists at the expected path. |
-| Pipeline cannot locate modules or files | Confirm that commands are run from the repository root and that script paths match the actual directory structure. |
+| Pipeline cannot locate modules or files | Confirm commands are run from the repository root and that script paths match the actual directory structure. |
 
 ## Roadmap
 
@@ -657,7 +626,7 @@ A credible performance claim requires clearly documented data sources, held-out 
 - [ ] Tune ensemble weights using validation data.
 - [ ] Integrate the Multi-Fault UAV and RflyMAD datasets for real flight-controller and motor signals.
 - [ ] Replace simulated dashboard updates with real or replayed telemetry.
-- [ ] Validate the complete pipeline against the DRDO accuracy target using appropriate independent evaluation.
+- [ ] Validate the complete pipeline against the DRDO accuracy target using independent evaluation.
 - [ ] Prepare the technical report and presentation deck.
 
 ## References
@@ -669,11 +638,5 @@ A credible performance claim requires clearly documented data sources, held-out 
 
 ---
 
-**Project status:** Research demonstration and prototype. Results depend on the dataset actually loaded, the evaluation procedure, and the availability of trained models. Real-world UAV validation remains future work.
+**Project status:** Research demonstration and prototype. Results depend on the datasets actually loaded, the evaluation procedure, and the availability of trained models. Real-world UAV validation remains future work.
 
-## References
-
-- DRDO, *Research Problems for DIA-CoEs*, September 2026, Directorate of Futuristic Technology Management (Problem 6, ADE)
-- NASA Prognostics Center of Excellence data repository (C-MAPSS, Battery)
-- FEMTO-ST PRONOSTIA bearing dataset (IEEE PHM 2012 Challenge)
-- Lundberg and Lee, *A Unified Approach to Interpreting Model Predictions* (SHAP)
