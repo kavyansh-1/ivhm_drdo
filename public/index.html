@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRDO IVHM — UAV Health Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#060E1A;--sur:#0C1A2E;--sur2:#122540;--bdr:#1E3A5F;--gold:#C9A227;--grn:#22C55E;--org:#F59E0B;--red:#EF4444;--txt:#E0EAF5;--dim:#6B8CAE;--mono:'Share Tech Mono',monospace;--hd:'Rajdhani',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;min-height:100%}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.025) 2px,rgba(0,0,0,.025) 4px);pointer-events:none;z-index:9999}
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 22px;border-bottom:1px solid var(--bdr);background:var(--sur);position:sticky;top:0;z-index:100}
+.badge{background:var(--gold);color:#000;font-family:var(--hd);font-weight:700;font-size:11px;padding:3px 9px;letter-spacing:1.5px}
+.hdr-title{font-family:var(--hd);font-size:17px;font-weight:700;margin-left:14px}
+.hdr-title span{color:var(--gold)}
+.hdr-sub{font-size:10px;color:var(--dim);font-family:var(--mono);margin-top:2px}
+.live-ind{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);font-family:var(--mono)}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--grn);animation:pg 2s infinite}
+@keyframes pg{0%,100%{opacity:1}50%{opacity:.2}}
+.clock{font-family:var(--mono);font-size:13px;color:var(--gold);margin-left:18px}
+.wrap{padding:18px 22px;max-width:1560px;margin:0 auto}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:var(--sur);border:1px solid var(--bdr);padding:16px 18px;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%)}
+.kpi-lbl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;font-family:var(--hd)}
+.kpi-val{font-family:var(--hd);font-size:34px;font-weight:700;line-height:1}
+.kpi-info{font-size:10px;color:var(--dim);margin-top:4px;font-family:var(--mono)}
+.kpi-bar{height:3px;background:var(--bdr);border-radius:2px;margin-top:9px;overflow:hidden}
+.kpi-fill{height:100%;border-radius:2px;transition:width 1s}
+.sec-lbl{font-family:var(--hd);font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:12px;padding-left:10px;border-left:3px solid var(--gold)}
+.sys-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.sc{background:var(--sur);border:1px solid var(--bdr);padding:14px;cursor:pointer;transition:border-color .15s,background .15s;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))}
+.sc:hover,.sc.active{border-color:var(--gold);background:var(--sur2)}
+.sc.fault{border-color:var(--red);animation:pb 1.4s infinite}
+@keyframes pb{0%,100%{border-color:var(--red)}50%{border-color:rgba(239,68,68,.2)}}
+.sc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.sc-name{font-family:var(--hd);font-size:14px;font-weight:600}
+.sc-badge{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:2px;font-weight:600}
+.b-ok{background:rgba(34,197,94,.12);color:var(--grn)}.b-dg{background:rgba(245,158,11,.12);color:var(--org)}.b-ft{background:rgba(239,68,68,.12);color:var(--red)}
+.sc-score{font-family:var(--mono);font-size:26px;margin-bottom:4px}
+.sc-pct{font-size:13px;color:var(--dim)}
+.sc-bar{height:4px;background:var(--bdr);border-radius:2px;overflow:hidden;margin-bottom:8px}
+.sc-fill{height:100%;border-radius:2px;transition:width 1s}
+.sc-meta{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);font-family:var(--mono)}
+.bot{display:grid;grid-template-columns:1fr 370px;gap:14px}
+.panel{background:var(--sur);border:1px solid var(--bdr);padding:18px}
+.panel-hd{font-family:var(--hd);font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:2px;padding-bottom:10px;border-bottom:1px solid var(--bdr);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+.chart-wrap{position:relative;height:210px}
+.tabs{display:flex;border-bottom:1px solid var(--bdr);margin-bottom:12px}
+.tab{background:none;border:none;color:var(--dim);font-family:var(--hd);font-size:11px;font-weight:600;padding:7px 13px;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.tab.on{color:var(--gold);border-bottom-color:var(--gold)}
+.sr{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(30,58,95,.4);font-size:11px}
+.sn{color:var(--dim);font-family:var(--mono)}.sv{font-family:var(--mono);font-size:12px}
+.st{font-size:9px;padding:1px 5px;border-radius:2px}.ok{background:rgba(34,197,94,.1);color:var(--grn)}.bad{background:rgba(239,68,68,.1);color:var(--red)}
+.alert{display:flex;gap:9px;padding:9px 11px;margin-bottom:7px;border-left:3px solid}
+.alert.crit{border-color:var(--red);background:rgba(239,68,68,.05)}.alert.warn{border-color:var(--org);background:rgba(245,158,11,.05)}
+.al{font-size:10px;font-family:var(--hd);font-weight:700;letter-spacing:1.5px}
+.am{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.4}
+.models-used{font-size:9px;color:var(--dim);font-family:var(--mono);margin-top:6px}
+.model-tag{background:rgba(201,162,39,.12);color:var(--gold);padding:1px 5px;border-radius:2px;margin-right:4px;font-size:9px}
+@media(max-width:1100px){.sys-grid{grid-template-columns:repeat(2,1fr)}.kpi-row{grid-template-columns:repeat(2,1fr)}.bot{grid-template-columns:1fr}}
+.loading{text-align:center;padding:60px;color:var(--dim);font-family:var(--mono);font-size:13px}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div style="display:flex;align-items:center">
+    <div class="badge">DRDO</div>
+    <div style="margin-left:14px">
+      <div class="hdr-title"><span>IVHM</span> — Integrated Vehicle Health Monitor</div>
+      <div class="hdr-sub">DIA-CoE Research Demo · RandomForest + BiLSTM + LSTM-Autoencoder · Ensemble</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center">
+    <div class="live-ind"><div class="live-dot"></div>LIVE STREAM</div>
+    <div class="clock" id="clk">--:--:--</div>
+  </div>
+</header>
+
+<div class="wrap" id="app">
+  <div class="loading">⟳ Loading IVHM data...</div>
+</div>
+
+<script>
+const hc = s => s >= 70 ? '#22C55E' : s >= 40 ? '#F59E0B' : '#EF4444';
+const COL = ["Airframe","Hydraulics","Fuel System","Li-Ion Battery","Electronics","Actuators","ECS","Electrical"]
+            .reduce((a,n,i)=>({...a,[n]:["#38BDF8","#A78BFA","#FCD34D","#6EE7B7","#F9A8D4","#FCA5A1","#EF4444","#C4B5FD"][i]}),{});
+let D = null, sel = null, chart = null;
+
+async function fetchData(live=false) {
+  const r = await fetch(live ? '/api/live' : '/api/report');
+  return r.json();
+}
+
+function render(data) {
+  D = data;
+  if(!sel) sel = Object.keys(D.subsystems)[0];
+  document.getElementById('app').innerHTML = buildHTML();
+  attachEvents();
+  buildChart();
+  clock();
+  setInterval(()=> fetchData(true).then(d=>{D=d;updateLive()}), 4000);
+  setInterval(clock, 1000);
+}
+
+function buildHTML() {
+  const subs   = D.subsystems;
+  const names  = Object.keys(subs);
+  const nCrit  = D.n_critical || 0;
+  const oh     = D.overall_health;
+  const ohCol  = hc(oh);
+
+  return `
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-lbl">System Health</div>
+      <div class="kpi-val" id="kpi-health" style="color:${ohCol}">${oh}%</div>
+      <div class="kpi-info" id="kpi-health-sub">${nCrit > 0 ? nCrit+' critical' : 'All systems nominal'}</div>
+      <div class="kpi-bar"><div class="kpi-fill" id="kpi-fill-h" style="width:${oh}%;background:${ohCol}"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">Ensemble Models</div>
+      <div class="kpi-val" style="color:var(--gold)">3</div>
+      <div class="kpi-info">RF + BiLSTM + AE</div>
+      <div class="kpi-bar"><div class="kpi-fill" style="width:100%;background:var(--gold)"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">Anomalies</div>
+      <div class="kpi-val" id="kpi-anom" style="color:var(--org)">${D.total_anomalies}</div>
+      <div class="kpi-info">Ensemble-detected</div>
+      <div class="kpi-bar"><div class="kpi-fill" style="width:15%;background:var(--org)"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">Critical Systems</div>
+      <div class="kpi-val" style="color:${nCrit>0?'var(--red)':'var(--grn)'}">${nCrit}</div>
+      <div class="kpi-info" style="color:${nCrit>0?'var(--red)':'var(--grn)'}">${nCrit>0?'⬤ '+D.critical_systems.join(', '):'✓ None'}</div>
+      <div class="kpi-bar"><div class="kpi-fill" style="width:${nCrit/8*100}%;background:var(--red)"></div></div>
+    </div>
+  </div>
+  <div class="sec-lbl">Subsystem Health Matrix — Click to inspect</div>
+  <div class="sys-grid" id="sgrid">${names.map(buildCard).join('')}</div>
+  <div class="bot">
+    <div class="panel">
+      <div class="panel-hd"><span>24-Hour Health Trend (Simulated)</span><span style="font-size:10px;color:var(--dim);font-family:var(--mono);text-transform:none;letter-spacing:0">8 subsystems</span></div>
+      <div class="chart-wrap"><canvas id="tc"></canvas></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="panel" style="flex:1">
+        <div class="panel-hd"><span id="det-name">${sel}</span></div>
+        <div class="tabs">
+          <button class="tab on" onclick="stab('s',this)">Summary</button>
+          <button class="tab" onclick="stab('m',this)">Models</button>
+        </div>
+        <div id="ts">${buildSummaryTab()}</div>
+        <div id="tm" style="display:none">${buildModelsTab()}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-hd"><span>Alert Log</span><span style="font-size:9px;color:var(--red);font-family:var(--mono);text-transform:none;letter-spacing:0">${nCrit} CRITICAL</span></div>
+        <div id="ap">${buildAlerts()}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildCard(n) {
+  const s = D.subsystems[n];
+  const c = hc(s.avg_health);
+  const bc = s.status==='Healthy'?'b-ok':s.status==='Degraded'?'b-dg':'b-ft';
+  const fc = s.status==='Faulty'?'fault':'';
+  const ac = n===sel?'active':'';
+  return `<div class="sc ${fc} ${ac}" onclick="selectSys('${n}')">
+    <div class="sc-top"><div class="sc-name">${n}</div><div class="sc-badge ${bc}">${s.status}</div></div>
+    <div class="sc-score" style="color:${c}">${s.avg_health}<span class="sc-pct">%</span></div>
+    <div class="sc-bar"><div class="sc-fill" style="width:${s.avg_health}%;background:${c}"></div></div>
+    <div class="sc-meta"><span>RUL ${s.rul_hours}h</span><span>⚠ ${s.n_anomalies}</span></div>
+  </div>`;
+}
+
+function buildSummaryTab() {
+  const s = D.subsystems[sel];
+  const c = hc(s.avg_health);
+  return `
+  <div class="sr"><span class="sn">avg_health</span><span class="sv" style="color:${c}">${s.avg_health}%</span><span class="st ${s.avg_health>=70?'ok':'bad'}">${s.status.toUpperCase()}</span></div>
+  <div class="sr"><span class="sn">min_health</span><span class="sv">${s.min_health}%</span><span class="st ${s.min_health>=40?'ok':'bad'}">MIN</span></div>
+  <div class="sr"><span class="sn">rul_hours</span><span class="sv">${s.rul_hours}h</span><span class="st ${s.rul_hours>100?'ok':'bad'}">${s.rul_hours>100?'OK':'LOW'}</span></div>
+  <div class="sr"><span class="sn">n_anomalies</span><span class="sv">${s.n_anomalies}</span><span class="st ${s.n_anomalies<30?'ok':'bad'}">${s.n_anomalies<30?'OK':'HIGH'}</span></div>`;
+}
+
+function buildModelsTab() {
+  const s = D.subsystems[sel];
+  const mods = s.models_used || ["classical"];
+  const weights = {classical: "50%", lstm: "30%", autoencoder: "20%"};
+  return `
+  <div style="margin-bottom:10px">
+    ${mods.map(m=>`<span class="model-tag">${m}</span>`).join('')}
+    <div class="models-used" style="margin-top:8px">Ensemble weights:</div>
+    ${mods.map(m=>`
+      <div style="margin-top:5px">
+        <div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:2px">
+          <span style="color:var(--dim);font-family:var(--mono)">${m}</span>
+          <span style="color:var(--gold);font-family:var(--mono)">${weights[m]||'—'}</span>
+        </div>
+        <div style="height:3px;background:var(--bdr);border-radius:2px">
+          <div style="height:100%;width:${weights[m]||'0'};background:var(--gold);border-radius:2px"></div>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function buildAlerts() {
+  const crits = Object.entries(D.subsystems)
+    .filter(([,s])=>s.status==='Faulty')
+    .map(([n,s])=>`<div class="alert crit"><div style="font-size:14px">🔴</div><div><div class="al" style="color:#FF4444">CRITICAL</div><div class="am">${n} — Immediate maintenance required. RUL: ${s.rul_hours}h</div></div></div>`);
+  const warns = Object.entries(D.subsystems)
+    .filter(([,s])=>s.status==='Degraded')
+    .map(([n,s])=>`<div class="alert warn"><div style="font-size:14px">⚠️</div><div><div class="al" style="color:#F59E0B">WARNING</div><div class="am">${n} — Performance degrading. RUL: ${s.rul_hours}h</div></div></div>`);
+  const all = [...crits, ...warns];
+  return all.length ? all.join('') : '<div style="text-align:center;padding:18px;color:var(--dim);font-size:11px;font-family:var(--mono)">✓ No active alerts</div>';
+}
+
+function buildChart() {
+  const ctx    = document.getElementById('tc').getContext('2d');
+  const labels = Array.from({length:24},(_,i)=>`${String(i).padStart(2,'0')}:00`);
+  const subs   = D.subsystems;
+  const names  = Object.keys(subs);
+
+  const datasets = names.map(n => {
+    const base = subs[n].avg_health;
+    const data = Array.from({length:24},(_,i)=>
+      Math.max(0,Math.min(100, base + (Math.random()-0.5)*10 - i*0.1)));
+    data[23] = base;
+    return {
+      label:n, data,
+      borderColor: COL[n], backgroundColor:'transparent',
+      borderWidth: n==='ECS'?2:1.5, tension:.4,
+      pointRadius:0, pointHoverRadius:3,
+      borderDash: n==='ECS'?[4,2]:[]
+    };
+  });
+
+  chart = new Chart(ctx, {
+    type:'line',
+    data:{labels,datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#6B8CAE',font:{size:9,family:'Share Tech Mono'},boxWidth:10,padding:5}},
+        tooltip:{backgroundColor:'#0C1A2E',borderColor:'#1E3A5F',borderWidth:1,titleColor:'#C9A227',bodyColor:'#E0EAF5',titleFont:{family:'Rajdhani'},bodyFont:{family:'Share Tech Mono',size:10}}
+      },
+      scales:{
+        x:{grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#6B8CAE',font:{size:8,family:'Share Tech Mono'},maxTicksLimit:8}},
+        y:{min:0,max:100,grid:{color:'rgba(30,58,95,.3)'},ticks:{color:'#6B8CAE',font:{size:8,family:'Share Tech Mono'},callback:v=>v+'%'}}
+      }
+    }
+  });
+}
+
+function selectSys(n) {
+  sel = n;
+  document.querySelectorAll('.sc').forEach(c=>c.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('det-name').textContent = n;
+  document.getElementById('ts').innerHTML = buildSummaryTab();
+  document.getElementById('tm').innerHTML = buildModelsTab();
+}
+
+function stab(t,btn) {
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('ts').style.display = t==='s'?'block':'none';
+  document.getElementById('tm').style.display = t==='m'?'block':'none';
+}
+
+function attachEvents() {}
+
+function updateLive() {
+  const oh = D.overall_health;
+  const el = document.getElementById('kpi-health');
+  if(el) { el.textContent = oh+'%'; el.style.color = hc(oh); }
+  const fill = document.getElementById('kpi-fill-h');
+  if(fill) { fill.style.width = oh+'%'; fill.style.background = hc(oh); }
+  const anom = document.getElementById('kpi-anom');
+  if(anom) anom.textContent = D.total_anomalies;
+  document.querySelectorAll('.sc').forEach(card => {
+    const n = card.getAttribute('onclick')?.match(/'(.+?)'/)?.[1];
+    if(!n || !D.subsystems[n]) return;
+    const s = D.subsystems[n];
+    const score = card.querySelector('.sc-score');
+    const fill  = card.querySelector('.sc-fill');
+    if(score) { score.innerHTML = s.avg_health+'<span class="sc-pct">%</span>'; score.style.color = hc(s.avg_health); }
+    if(fill)  { fill.style.width = s.avg_health+'%'; fill.style.background = hc(s.avg_health); }
+  });
+  if(sel) {
+    document.getElementById('ts').innerHTML = buildSummaryTab();
+  }
+}
+
+function clock() {
+  const el = document.getElementById('clk');
+  if(el) el.textContent = new Date().toTimeString().slice(0,8);
+}
+
+// Boot
+fetchData().then(render);
+</script>
+</body>
+</html>

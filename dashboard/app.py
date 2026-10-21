@@ -11,8 +11,7 @@ import json
 import random
 import numpy as np
 from pathlib import Path
-from flask import Flask, jsonify, render_template, request
-
+from flask import Flask, jsonify, request, send_from_directory
 app = Flask(__name__)
 
 REPORT_PATH = Path(__file__).parent.parent / "reports" / "ivhm_report.json"
@@ -50,7 +49,7 @@ def _demo_data() -> dict:
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return send_from_directory("templates", "index.html")
 
 
 @app.route("/api/report")
