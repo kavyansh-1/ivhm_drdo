@@ -1,0 +1,11 @@
+[project]
+name = "ivhm-drdo"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0.0",
+    "numpy>=1.24.0",
+]
+
+[tool.vercel]
+entrypoint = "dashboard.app:app"
